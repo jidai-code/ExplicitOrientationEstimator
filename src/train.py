@@ -1,7 +1,6 @@
 import sys
 import numpy as np
 import torch
-import torch.nn.parallel
 import torch.backends.cudnn as cudnn
 from tensorboardX import SummaryWriter
 from scipy.misc import imshow
@@ -67,7 +66,7 @@ for epoch in range(schedule['epoch']['start'],schedule['epoch']['end']):
 
 		train_loss.update(loss.data[0],T_inv_var.size(0))
 		train_logger.add_scalar('error_iter', train_loss.val, iterN)
-		print('epoch: %03i/%03i; batch: %04i/%04i (%.2f%%); loss:%.3f (%.3f)' % (epoch,100,batch_id,train_length,100*batch_id/train_length,train_loss.val,train_loss.avg))
+		print('epoch: %03i/%03i; batch: %04i/%04i (%.2f%%); loss:%.3f (%.3f)' % (epoch,schedule['epoch']['end'],batch_id,train_length,100*batch_id/train_length,train_loss.val,train_loss.avg))
 		iterN += 1
 	train_logger.add_scalar('error_epoch', train_loss.avg, epoch)
 	if (train_loss.avg < best_score):

@@ -90,7 +90,7 @@ class torch_dataset(data.Dataset):
 		c_x,c_y = patch_info[1:3]	# get location of patch center
 		c_x = int(c_x + w/2)	# normalize x to grid
 		c_y = int(h/2 - c_y)	# normalize y to grid
-		patch = img[c_y-32:c_y+32,c_x-32:c_x+32]
+		patch = img[c_y-64:c_y+64,c_x-64:c_x+64]
 		# p_m = patch.mean()
 		# p_std = patch.std()
 		# if not(np.isfinite(p_std) and (p_std!=0)):

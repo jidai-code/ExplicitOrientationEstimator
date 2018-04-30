@@ -5,7 +5,7 @@ train_schedule_1 = {
 	},
 	
 	'model': {
-		'name': 'SiameseNet',
+		'name': 'Siamese2StreamNet',
 	},
 	
 	'epoch': {
@@ -21,7 +21,7 @@ train_schedule_1 = {
 	'log':{
 		'pretrained': False,
 		'ckpt': None,
-		'TB_path': '../experiments/siamesenet/',
-		'weights_path': '../experiments/siamesenet/',
+		'TB_path': '../experiments/Siamese2StreamNet/',
+		'weights_path': '../experiments/Siamese2StreamNet/checkpoint.pth.tar',
 	},
 }

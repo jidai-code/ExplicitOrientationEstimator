@@ -1,3 +1,3 @@
 from .dataset import NotreDame, Liberty
 
-__all__ = ('NotreData','Liberty')
+__all__ = ('NotreDame','Liberty')
