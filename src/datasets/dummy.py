@@ -5,9 +5,9 @@ import torch.utils.data as data
 import torch.nn.functional as F
 from scipy.misc import imread, imshow
 
-root_path = '/home/jdai/Downloads/NotreDame/'
-image_list_path = '/home/jdai/Downloads/NotreDame/list.txt'
-image_info = '/home/jdai/Downloads/NotreDame/info.txt'
+root_path = '/home/jd/Downloads/NotreDame/'
+image_list_path = '/home/jd/Downloads/NotreDame/list.txt'
+image_info = '/home/jd/Downloads/NotreDame/info.txt'
 
 with open(image_list_path,'r') as fp:
 	line = fp.readline()
