@@ -31,7 +31,7 @@ def adjust_lr(optimizer, epoch, schedule):
 
 # print system info
 def system_check():
-	print('======================system check======================')
+	print('========================TransNet========================')
 	print('Python:\t\t%s' % (platform.python_version()))
 	print('PyTorch:\t%s' % (torch.__version__))
 	print('GPU:\t\t%s' % (torch.cuda.get_device_name(0)))

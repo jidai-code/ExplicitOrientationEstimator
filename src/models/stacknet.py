@@ -12,7 +12,7 @@ class StackNet(nn.Module):
 		print('Model:\t\tStackNet')
 
 		self.conv1 = nn.Sequential(
-			nn.Conv2d(in_channels = 2, out_channels = 96, kernel_size = 7, stride = 3),
+			nn.Conv2d(in_channels = 6, out_channels = 96, kernel_size = 7, stride = 3),
 			nn.ReLU(inplace = True),
 			nn.MaxPool2d(kernel_size = 2, stride = 2),
 			)
@@ -50,21 +50,8 @@ class StackNet(nn.Module):
 		return F.grid_sample(patch, grid)
 
 	def forward(self,x):
-
-		patches = x[0]
-		p1 = patches[:,0,:,:].unsqueeze(1)
-		p2 = patches[:,1,:,:].unsqueeze(1)
-
-		T_affine = x[1]
-		T_affine1 = T_affine[:,0:2,:]
-		T_affine2 = T_affine[:,2:4,:]
-
-		p1_af = self.STN(p1,T_affine1)
-		p2_af = self.STN(p2,T_affine2)
-
-		inputs = torch.cat([p1_af,p2_af],dim=1)
 		
-		conv1_out = self.conv1(inputs)
+		conv1_out = self.conv1(x)
 		conv2_out = self.conv2(conv1_out)
 		conv3_out = self.conv3(conv2_out)
 		conv3_out = conv3_out.view(-1,256)
