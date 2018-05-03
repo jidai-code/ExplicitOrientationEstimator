@@ -10,12 +10,12 @@ train_schedule_1 = {
 	
 	'epoch': {
 		'start': 0,
-		'end': 300,
+		'end': 100,
 	},
 	
 	'lr': {
-		'values': [1e-4, 1e-5],
-		'ckpts': [100],
+		'values': [1e-4, 5e-5, 1e-5],
+		'ckpts': [40,60],
 	},
 
 	'log':{

@@ -194,7 +194,7 @@ def NotreDame():
 	size_path = '/home/jd/Downloads/NotreDame/info.txt'
 	patch_list, image_list = load_image_and_match(root,point_list_path,image_list_path,size_path)
 	train_patch_list = patch_list[0:int(len(patch_list)/2)]
-	valid_patch_list = patch_list[32:int(len(patch_list)/2):int(7*len(patch_list)/10)]
+	valid_patch_list = patch_list[int(len(patch_list)/2):int(7*len(patch_list)/10)]
 	print('Train #:\t%i' % (int(len(patch_list)/2)))
 	print('Valid #:\t%i' % (int(len(patch_list)/5)))
 	train_data = torch_dataset(train_patch_list,image_list)

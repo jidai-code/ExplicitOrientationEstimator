@@ -1,92 +1,155 @@
+import random
 import sys
+import time
+import math
 import numpy as np
 import torch
-import models
-import datasets
+import torch.utils.data as data
 import torch.nn.functional as F
-import torch.nn.parallel
+from scipy.misc import imread, imshow
 import torch.backends.cudnn as cudnn
 from tensorboardX import SummaryWriter
-from datasets.NotreDame import NotreDame
-from scipy.misc import imshow
-from models.stacknet import StackNet
+import models
+from utils import *
+from metrics import *
+from train_schedule import train_schedule_1 as schedule
 
-train_data = NotreDame()
-train_loader = torch.utils.data.DataLoader(train_data, batch_size = 1, num_workers = 1, shuffle = True)
-train_length = len(train_loader)
+root_path = '/home/jd/Downloads/NotreDame/'
+point_list_path = '/home/jd/Downloads/NotreDame/notredame.out'
+image_list_path = '/home/jd/Downloads/NotreDame/list.txt'
 
-model1 = models.__dict__['StackNet']()
-model1 = model1.cuda()
-model2 = models.__dict__['SiameseNet']()
-model2 = model2.cuda()
-model3 = models.__dict__['Siamese2StreamNet']()
-model3 = model3.cuda()
+def load_image_and_match(root = root_path, point_list_path = point_list_path, image_list_path = image_list_path):
+	size_path = '/home/jd/Downloads/NotreDame/info.txt'
+	margin = 128
+	with open(point_list_path,'r') as fp:
+		line = fp.readline()
+		point_list_file = []
+		while line:
+			point_list_file.append(line.strip('\n'))
+			line = fp.readline()
 
-ckpt1 = '/home/jdai/Documents/OrientationNet/experiments/stacknet/checkpoint.pth.tar'
-ckpt2 = '/home/jdai/Documents/OrientationNet/experiments/siamesenet/checkpoint.pth.tar'
-ckpt3 = '/home/jdai/Documents/OrientationNet/experiments/Siamese2StreamNet/checkpoint.pth.tar'
+	with open(image_list_path,'r') as fp:
+		line = fp.readline()
+		image_list = []
+		while line:
+			image_list.append(line.strip('\n'))
+			line = fp.readline()
 
-oldweights = torch.load(ckpt1)
+	with open(size_path,'r') as fp:
+		line = fp.readline()
+		size_list = []
+		while line:
+			tline = line.strip('\n')
+			tsplit = tline.split(',')
+			tsplit[0] = int(tsplit[0])//2
+			tsplit[1] = int(tsplit[1])//2
+			size_list.append(tsplit)
+			line = fp.readline()
+
+	metadata = point_list_file[1].split()
+	camera_num = int(metadata[0])
+	matches_num = int(metadata[1])
+
+	print('NotreDame dataset')
+	print('%i matched points found in %i cameras' % (matches_num, camera_num))
+
+	line_one = camera_num * 5 + 4
+	line_end = camera_num * 5 + 4 + (matches_num - 1) * 3
+
+	matches_long = []
+
+	for i in range(line_one,line_end + 1,3):
+		matches_long.append(point_list_file[i].split())
+
+	match_short = []
+
+	for i in range(len(matches_long)):
+		sample_match = matches_long[i]
+		match_piece = []
+		for j in range(int(sample_match[0])):
+			match_ind = []
+			imgid = int(sample_match[j * 4 + 1])
+			c_x = float(sample_match[j * 4 + 3])
+			c_y = float(sample_match[j * 4 + 4])
+			if ((c_x + margin) < size_list[imgid][1]) and ((c_x - margin) > -size_list[imgid][1]):
+				if ((c_y + margin) < size_list[imgid][0]) and ((c_y - margin) > -size_list[imgid][0]):
+					match_ind.append(int(sample_match[j * 4 + 1]))
+					match_ind.append(float(sample_match[j * 4 + 3]))
+					match_ind.append(float(sample_match[j * 4 + 4]))
+					match_piece.append(match_ind)
+		if (len(match_piece) >= 2):
+			match_short.append(match_piece)
+
+	return match_short, image_list
+
+[match_short, image_list] = load_image_and_match()
+
+model = models.__dict__['StackNet']()
+model = model.cuda()
+oldweights = torch.load('/home/jd/Documents/TransNet/TransNet/experiments/StackNet/checkpoint.pth.tar')
 if 'state_dict' in oldweights.keys():
-	model1.load_state_dict(oldweights['state_dict'])
+	model.load_state_dict(oldweights['state_dict'])
 else:
-	model1.load_state_dict(oldweights)
+	model.load_state_dict(oldweights)
+model.eval()
 
-oldweights = torch.load(ckpt2)
-if 'state_dict' in oldweights.keys():
-	model2.load_state_dict(oldweights['state_dict'])
-else:
-	model2.load_state_dict(oldweights)
+for idd in range(3000,4001):
+	candidates = match_short[idd]
+	patch1 = candidates[0]
+	patch2 = candidates[1]
 
-oldweights = torch.load(ckpt3)
-if 'state_dict' in oldweights.keys():
-	model3.load_state_dict(oldweights['state_dict'])
-else:
-	model3.load_state_dict(oldweights)
+	x1,y1 = patch1[1:3]
+	x2,y2 = patch2[1:3]
 
-T_affine = np.matrix([[1,0,0],[0,1,0]]).astype(np.float32)
-T_affine = torch.from_numpy(T_affine).unsqueeze(0)
+	img1 = imread('%s%s' % ('/home/jd/Downloads/NotreDame/', image_list[patch1[0]])).astype(np.float32)
+	img2 = imread('%s%s' % ('/home/jd/Downloads/NotreDame/', image_list[patch2[0]])).astype(np.float32)
+	img1 = img1 / 255.0
+	img2 = img2 / 255.0
 
-model1.eval()
-model2.eval()
-model3.eval()
+	imh1,imw1, _ = img1.shape
+	imh2,imw2, _ = img2.shape
 
-for batch_id, patches in enumerate(train_loader):
-	patches_cuda = [patch[:,:,32:96,32:96].cuda() for patch in patches]
-	T_affine_cuda = [T_affine.cuda(),T_affine.cuda()]
-	patches_var = torch.autograd.Variable(torch.cat(patches_cuda,dim = 1),volatile = True)
-	T_affine_var = torch.autograd.Variable(torch.cat(T_affine_cuda,dim = 1),volatile = True)
-	input_var = [patches_var,T_affine_var]
-	# forward
-	output_var1 = model1(input_var)
-	output_var2 = model2(input_var)
-	output_var3 = model3(input_var)
+	img1 = np.transpose(img1,[2,0,1])
+	img2 = np.transpose(img2,[2,0,1])
 
-	T_pred1 = output_var1.data.cpu()
-	T_pred1 = F.pad(T_pred1,(0,1))
-	T_pred2 = output_var2.data.cpu()
-	T_pred2 = F.pad(T_pred2,(0,1))
-	T_pred3 = output_var3.data.cpu()
-	T_pred3 = F.pad(T_pred3,(0,1))
+	img1_ts = torch.from_numpy(img1).unsqueeze(0)
+	img2_ts = torch.from_numpy(img2).unsqueeze(0)
 
-	p1_ts = patches[0][:,:,32:96,32:96].contiguous()
-	p2_ts = patches[1][:,:,32:96,32:96].contiguous()
-	p2_ori_ts = patches[1].contiguous()
+	t_id = np.matrix([[1,0,0],[0,1,0]],dtype=np.float32)
+	t_id_ts = torch.from_numpy(t_id).unsqueeze(0)
+	grid_id1 = F.affine_grid(t_id_ts,torch.Size([1,3,64,64]))
+	grid_id2 = F.affine_grid(t_id_ts,torch.Size([1,3,64,64]))
 
-	p1 = p1_ts.view(64,64).numpy()
-	p2 = p2_ts.view(64,64).numpy()
+	grid_id1[:,:,:,0] = grid_id1[:,:,:,0] * 64 / imw1
+	grid_id1[:,:,:,1] = grid_id1[:,:,:,1] * 64 / imh1
+	grid_id1[:,:,:,0] = grid_id1[:,:,:,0] + 2 * x1 / (imw1 - 1)
+	grid_id1[:,:,:,1] = grid_id1[:,:,:,1] - 2 * y1 / (imh1 - 1)
 
-	grid = F.affine_grid(T_pred1,p2_ts.size())/2
-	p2_m1_ts = F.grid_sample(p2_ori_ts,grid).data
+	grid_id2[:,:,:,0] = grid_id2[:,:,:,0] * 64 / imw2
+	grid_id2[:,:,:,1] = grid_id2[:,:,:,1] * 64 / imh2
+	grid_id2[:,:,:,0] = grid_id2[:,:,:,0] + 2 * x2 / (imw2 - 1)
+	grid_id2[:,:,:,1] = grid_id2[:,:,:,1] - 2 * y2 / (imh2 - 1)
 
-	grid = F.affine_grid(T_pred2,p2_ts.size())/2
-	p2_m2_ts = F.grid_sample(p2_ori_ts,grid).data
+	patch1_ts = F.grid_sample(img1_ts,grid_id1).data
+	patch2_ts = F.grid_sample(img2_ts,grid_id2).data
 
-	grid = F.affine_grid(T_pred3,p2_ts.size())/2
-	p2_m3_ts = F.grid_sample(p2_ori_ts,grid).data
+	patch1_cuda = patch1_ts.cuda()
+	patch2_cuda = patch2_ts.cuda()
+	patches_var = torch.autograd.Variable(torch.cat([patch1_cuda,patch2_cuda],dim=1))
+	output_var = model(patches_var)
+	output = output_var.data
+	T_1 = torch.FloatTensor(torch.Size([1,2,3])).fill_(0)
+	T_1[0,0:2,0:2] = output[0,0:2,0:2]
+	grid_id3 = F.affine_grid(T_1,torch.Size([1,3,64,64]))
+	grid_id3[:,:,:,0] = grid_id3[:,:,:,0] * 64 / imw2
+	grid_id3[:,:,:,1] = grid_id3[:,:,:,1] * 64 / imh2
+	grid_id3[:,:,:,0] = grid_id3[:,:,:,0] + 2 * x2 / (imw2 - 1)
+	grid_id3[:,:,:,1] = grid_id3[:,:,:,1] - 2 * y2 / (imh2 - 1)
 
-	p2_m1 = p2_m1_ts.view(64,64).numpy()
-	p2_m2 = p2_m2_ts.view(64,64).numpy()
-	p2_m3 = p2_m3_ts.view(64,64).numpy()
+	patch3_ts = F.grid_sample(img2_ts,grid_id3).data
 
-	imshow(np.concatenate([p1,p2,p2_m1,p2_m2,p2_m3],axis=1))
+	patch1 = np.transpose(patch1_ts.numpy().squeeze(0),[1,2,0])
+	patch2 = np.transpose(patch2_ts.numpy().squeeze(0),[1,2,0])
+	patch3 = np.transpose(patch3_ts.numpy().squeeze(0),[1,2,0])
+
+	imshow(np.concatenate([patch1,patch2,patch3],axis=1))
