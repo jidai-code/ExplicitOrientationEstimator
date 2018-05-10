@@ -1,4 +1,6 @@
 import random
+import sys
+import time
 import math
 import numpy as np
 import torch
@@ -6,151 +8,155 @@ import torch.utils.data as data
 import torch.nn.functional as F
 from scipy.misc import imread, imshow
 
-def readMetaData(root):
+# progress bar (copied from "https://gist.github.com/vladignatyev/06860ec2040cb497f0f3")
+def progress(count, total):
+    bar_len = 80
+    filled_len = int(round(bar_len * count / float(total)))
 
-	path = '%s/info.txt' % (root)
+    percents = round(100.0 * count / float(total), 1)
+    bar = '=' * filled_len + '-' * (bar_len - filled_len)
 
-	with open(path,'r') as fp:
+    sys.stdout.write('[%s] %s%s\r' % (bar, percents, '%'))
+    sys.stdout.flush()
+
+def load_image_and_match(root,point_list_path,image_list_path,size_path):
+
+	margin = 128
+	with open(point_list_path,'r') as fp:
 		line = fp.readline()
-		point_id = []
+		point_list_file = []
 		while line:
-			tline = line.strip('\n')
-			tsplit = tline.split(' ')
-			point_id.append(int(tsplit[0]))
+			point_list_file.append(line.strip('\n'))
 			line = fp.readline()
 
-	meta_data = []
-	if_new_pt = False
-	previous_pt = -1
+	with open(image_list_path,'r') as fp:
+		line = fp.readline()
+		image_list = []
+		while line:
+			image_list.append(line.strip('\n'))
+			line = fp.readline()
 
-	for i in range(len(point_id)):
-		# read current point index
-		current_pt = point_id[i]
+	with open(size_path,'r') as fp:
+		line = fp.readline()
+		size_list = []
+		while line:
+			tline = line.strip('\n')
+			tsplit = tline.split(',')
+			tsplit[0] = int(tsplit[0])//2
+			tsplit[1] = int(tsplit[1])//2
+			tsplit[2] = int(tsplit[2])
+			size_list.append(tsplit)
+			line = fp.readline()
 
-		# computer img_id, row_id, col_id
-		img_id = i // 256
-		row_id = (i % 256) // 16
-		col_id = i % 16
-	
-		# check if processing new point
-		if (previous_pt != current_pt):
-			if_new_pt = True
-		else:
-			if_new_pt = False
+	metadata = point_list_file[1].split()
+	camera_num = int(metadata[0])
+	matches_num = int(metadata[1])
 
-		# if processing new point, save info of old point and create new list for new point
-		if if_new_pt:
-			if 'pt_data' in locals():
-				meta_data.append(pt_data)
-			pt_data = []
+	print('Name:\t\tNotreDame')
+	#print('\t%i matched points found in %i cameras' % (matches_num, camera_num))
 
-		pt_data.append([img_id,row_id,col_id])
-		previous_pt = current_pt
-	
-	# append last point
-	meta_data.append(pt_data)
+	line_one = camera_num * 5 + 4
+	line_end = camera_num * 5 + 4 + (matches_num - 1) * 3
 
-	return meta_data
+	matches_long = []
 
-def readPatch(root,img_id,row_id,col_id):
-	img = imread('%s/patches%04i.bmp' % (root, img_id))
-	return img[row_id*64:(row_id+1)*64,col_id*64:(col_id+1)*64]
+	for i in range(line_one,line_end + 1,3):
+		matches_long.append(point_list_file[i].split())
 
-def showPoint(root,meta_data,pid):
-	pt_info = meta_data[pid]
-	patches = []
-	for i in range(len(pt_info)):
-		patches.append(readPatch(root,pt_info[i][0],pt_info[i][1],pt_info[i][2]))
-	imshow(np.concatenate(patches,axis = 1))
+	patch_list = []
+
+	for i in range(len(matches_long)):
+		sample_match = matches_long[i]
+		for j in range(int(sample_match[0])):
+			match_ind = []
+			imgid = int(sample_match[j * 4 + 1])
+			c_x = float(sample_match[j * 4 + 3])
+			c_y = float(sample_match[j * 4 + 4])
+			if (size_list[imgid][2] == 1):
+				if ((int(c_x) + margin) < size_list[imgid][1]) and ((int(c_x) - margin) > -size_list[imgid][1]):
+					if ((int(c_y) + margin) < size_list[imgid][0]) and ((int(c_y) - margin) > -size_list[imgid][0]):
+						match_ind.append(int(sample_match[j * 4 + 1]))
+						match_ind.append(float(sample_match[j * 4 + 3]))
+						match_ind.append(float(sample_match[j * 4 + 4]))
+						patch_list.append(match_ind)
+
+	return patch_list, image_list
 
 class torch_dataset(data.Dataset):
-	def __init__(self, meta_data, root):
-		self.meta_data = meta_data
-		self.root = root
+	def __init__(self, patch_list,image_list):
+		self.patch_list = patch_list
+		self.image_list = image_list
+		self.images = []
+		self.load_images()
 
-	def __len__(self):
-		return len(self.meta_data)
+	def load_images(self):
+		time0 = time.time()
+		for i in range(len(self.image_list)):
+			progress(i,len(self.image_list)-1)
+			self.images.append(imread('%s%s' % ('/home/jd/Downloads/NotreDame/', self.image_list[i])))
+		print('\n\tcompleted in %.3f sec' % (time.time()-time0))	
+
+	def read_patch_fast(self, patch_info):
+		img = self.images[patch_info[0]].astype(np.float32)
+		imh,imw,_ = img.shape
+		c_x,c_y = patch_info[1:3]	# get location of patch center
+		c_id = int(c_x + imw/2)	# normalize x to grid
+		r_id = int(imh/2 - c_y)	# normalize y to grid
+		patch = img[r_id-64:r_id+64,c_id-64:c_id+64,:] / 255.0
+		patch = np.transpose(patch,[2,0,1])
+		patch_ts = torch.from_numpy(patch)
+		return patch_ts
+
 
 	def load_patch(self, patch_info):
+		img = imread('%s%s' % ('/home/jd/Downloads/NotreDame/', self.image_list[patch_info[0]])).astype(np.float32)
+		imh,imw,_ = img.shape
+		c_x,c_y = patch_info[1:3]	# get location of patch center
+		c_id = int(c_x + imw/2)	# normalize x to grid
+		r_id = int(imh/2 - c_y)	# normalize y to grid
+		patch = img[r_id-64:r_id+64,c_id-64:c_id+64,:] / 255.0
+		patch = np.transpose(patch,[2,0,1])
+		patch_ts = torch.from_numpy(patch)
+		return patch_ts
 
-		# unload corresponding image id, row id and column id
-		img_id = patch_info[0]
-		row_id = patch_info[1]
-		col_id = patch_info[2]
-
-		# read image and crop
-		img = imread('%s/patches%04i.bmp' % (self.root, img_id)).astype(np.float32)
-		patch = img[row_id*64:(row_id+1)*64,col_id*64:(col_id+1)*64]
-
-		# normalize and convert to tensor
-		patch = (patch - patch.mean()) / patch.std()
-		patch = torch.from_numpy(patch).unsqueeze(0)
-
-		return patch
-
-	def create_affine(self):
+	def get_affine(self):
 		# generate resize scale and rotation theta (rad)
-		scale1 = random.uniform(0.5,0.75)
-		theta1 = random.uniform(-math.pi,math.pi)
-		scale2 = random.uniform(0.5,0.75)
-		theta2 = theta1 + random.uniform(-math.pi/2,math.pi/2)
+		scale = random.uniform(3/4,4/3)
+		theta = random.uniform(-math.pi,math.pi)
 
 		# disect T_affine into 3 components for more trackability
-		T_scale1 = np.matrix([[scale1,0,0],[0,scale1,0],[0,0,1]])	# scale T
-		T_shear1 = np.matrix([[1,random.uniform(-0.2,0.2),0],[random.uniform(-0.2,0.2),1,0],[0,0,1]])	# shear T
-		T_rot1	= np.matrix([[math.cos(theta1),math.sin(theta1),0],[-math.sin(theta1),math.cos(theta1),0],[0,0,1]])	# rot T
+		T_scale = np.matrix([[scale,0,0],[0,scale,0],[0,0,1]])	# scale T
+		T_rot	= np.matrix([[math.cos(theta),math.sin(theta),0],[-math.sin(theta),math.cos(theta),0],[0,0,1]])	# rot T
 
-		T_scale2 = np.matrix([[scale2,0,0],[0,scale2,0],[0,0,1]])	# scale T
-		T_shear2 = np.matrix([[1,random.uniform(-0.2,0.2),0],[random.uniform(-0.2,0.2),1,0],[0,0,1]])	# shear T
-		T_rot2	= np.matrix([[math.cos(theta2),math.sin(theta2),0],[-math.sin(theta2),math.cos(theta2),0],[0,0,1]])	# rot T
-		# combine to T_affine and fine inverse T_affine (Ground Truth)
-		T_affine1 = T_rot1 * T_shear1 * T_scale1
-		T_affine2 = T_rot2 * T_shear2 * T_scale2
-		T_inv = T_affine1 * np.linalg.inv(T_affine2)
+		# create affine T
+		T_affine = T_rot * T_scale
 
-		T_affine1 = T_affine1[0:2,0:3].astype(np.float32)
-		T_affine2 = T_affine2[0:2,0:3].astype(np.float32)
+		# create inverse transform
+		T_inv = np.linalg.inv(T_affine)
+
+		T_affine = T_affine[0:2,0:3].astype(np.float32)
 		T_inv = T_inv[0:2,0:2].astype(np.float32)
 
-		# convert to tensor
-		T_affine1 = torch.from_numpy(T_affine1)
-		T_affine2 = torch.from_numpy(T_affine2)
+		T_affine = torch.from_numpy(T_affine)
 		T_inv = torch.from_numpy(T_inv)
-		#T_inv = T_inv.view(-1,2,3)
 
-		return [T_affine1,T_affine2], T_inv
+		return T_affine, T_inv
+
+	def __len__(self):
+		return len(self.patch_list)
 
 	def __getitem__(self, index):
-		# fetch point
-		candidate = self.meta_data[index]
-
-		# randomly pick two patches corresponding that point
-		pc_id = random.sample(range(0,len(candidate)),2)
-
-		# read patches from images
-		patches = []
-		for i in pc_id:
-			patches.append(self.load_patch(candidate[i]))
-
-		# create random affine transformation and GT
-		T_affine, T_inv = self.create_affine()
-
-		return patches, T_affine, T_inv
-
-
+		patch_info = self.patch_list[index]
+		#patch_ts = self.load_patch(patch_info)
+		patch_ts = self.read_patch_fast(patch_info)
+		[T_affine, T_inv] = self.get_affine()
+		return [patch_ts,T_affine, T_inv]
 
 def NotreDame():
-	print('Dataset:\tNotreDame')
-	root = '/home/jdai/Downloads/datas/notredame'
-	meta_data = readMetaData(root)
-	train_data = torch_dataset(meta_data,root)
+	root = '/home/jd/Downloads/NotreDame/'
+	point_list_path = '/home/jd/Downloads/NotreDame/notredame.out'
+	image_list_path = '/home/jd/Downloads/NotreDame/list.txt'
+	size_path = '/home/jd/Downloads/NotreDame/info.txt'
+	patch_list, image_list = load_image_and_match(root,point_list_path,image_list_path,size_path)
+	train_data = torch_dataset(patch_list,image_list)
 	return train_data
-
-def Liberty():
-	print('Dataset:\tLiberty')
-	root = '/home/jdai/Downloads/datas/liberty'
-	meta_data = readMetaData(root)
-	train_data = torch_dataset(meta_data,root)
-	return train_data
-
-

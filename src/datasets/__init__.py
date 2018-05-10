@@ -1,2 +1,2 @@
-from .new_dataset import NotreDame
+from .dataset import NotreDame
 __all__ = ('NotreDame')

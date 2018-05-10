@@ -1,4 +1,3 @@
-from .stacknet import StackNet
-from .siamnet import SiameseNet
-from .siamese2streamnet import Siamese2StreamNet
-__all__ = ('StackNet','SiameseNet','Siamese2StreamNet')
+from .stn_2ch import STN_2Ch
+from .stn_siam import STN_Siam
+__all__ = ('STN_2Ch','STN_Siam')
