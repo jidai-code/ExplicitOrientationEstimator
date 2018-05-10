@@ -5,7 +5,7 @@ train_schedule_1 = {
 	},
 	
 	'model': {
-		'name': 'STN_Siam',
+		'name': 'STN_test',
 	},
 	
 	'epoch': {
@@ -21,7 +21,7 @@ train_schedule_1 = {
 	'log':{
 		'pretrained': False,
 		'ckpt': None,
-		'TB_path': '../experiments/STN_Siam/',
-		'weights_path': '../experiments/STN_Siam/checkpoint.pth.tar',
+		'TB_path': '../experiments/STN_test/',
+		'weights_path': '../experiments/STN_test/checkpoint.pth.tar',
 	},
 }
