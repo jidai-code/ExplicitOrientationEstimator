@@ -140,7 +140,7 @@ class torch_dataset(data.Dataset):
 
 		bin_id = round(theta / (2 * math.pi / self.bins)) % self.bins
 
-		return T_affine, bin_id, scale
+		return T_affine, bin_id, scale, theta
 
 	def __len__(self):
 		return len(self.patch_list)
@@ -151,8 +151,8 @@ class torch_dataset(data.Dataset):
 			patch_ts = self.read_patch_fast(patch_info)
 		else:
 			patch_ts = self.load_patch(patch_info)
-		[T_affine,bin_id,scale] = self.get_affine()
-		return [patch_ts,T_affine,bin_id,scale]
+		[T_affine,bin_id,scale,theta] = self.get_affine()
+		return [patch_ts,T_affine,bin_id,scale,theta]
 
 def NotreDame(bins):
 	tv_split = 0.99
