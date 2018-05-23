@@ -4,12 +4,12 @@ import torch.nn.functional as F
 from torch.nn import init
 from .net_utils import *
 
-class STN_2Ch(base_net):
+class Zagoruyko_2ch(base_net):
 	def __init__(self):
 		base_net.__init__(self)
 
 	def setup(self):
-		print('STN:\t\tTwoChannels')
+		print('STN:\t\tZagoruyko_TwoChannels')
 
 		self.conv1 = nn.Sequential(
 			conv(in_planes = 6, out_planes = 96, kernel_size = 7, stride = 3),

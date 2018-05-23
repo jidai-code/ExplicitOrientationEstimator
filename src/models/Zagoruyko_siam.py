@@ -4,30 +4,26 @@ import torch.nn.functional as F
 from torch.nn import init
 from .net_utils import *
 
-class STN_test(base_net):
+class Zagoruyko_siam(base_net):
 	def __init__(self):
 		base_net.__init__(self)
 
 	def setup(self):
-		print('STN:\t\ttestNet')
+		print('STN:\t\tZagoruyko_SiameseNet')
 
 		self.conv1 = nn.Sequential(
-			conv(in_planes = 3, out_planes = 32, kernel_size = 3, padding = 1),
-			conv(in_planes = 32, out_planes = 32, kernel_size = 3, padding = 1),
+			conv(in_planes = 3, out_planes = 96, kernel_size = 7, stride = 3),
 			nn.MaxPool2d(kernel_size = 2, stride = 2),
 			)
 		self.conv2 = nn.Sequential(
-			conv(in_planes = 32, out_planes = 32, kernel_size = 3, padding = 1),
-			conv(in_planes = 32, out_planes = 32, kernel_size = 3, padding = 1),
+			conv(in_planes = 96, out_planes = 192, kernel_size = 5),
 			nn.MaxPool2d(kernel_size = 2, stride = 2),
 			)
 		self.conv3 = nn.Sequential(
-			conv(in_planes = 32, out_planes = 32, kernel_size = 3, padding = 1),
-			conv(in_planes = 32, out_planes = 32, kernel_size = 3, padding = 1),
-			nn.MaxPool2d(kernel_size = 2, stride = 2),
+			conv(in_planes = 192, out_planes = 256, kernel_size = 3),
 			)
 		self.fc = nn.Sequential(
-			nn.Linear(in_features = 4096, out_features = 256),
+			nn.Linear(in_features = 512, out_features = 256),
 			nn.ReLU(inplace = True),
 			nn.Linear(in_features = 256, out_features = 4),
 			)
@@ -55,8 +51,8 @@ class STN_test(base_net):
 		patch0_conv = self.conv3(self.conv2(self.conv1(patch0)))
 		patch1_conv = self.conv3(self.conv2(self.conv1(patch1)))
 
-		patch0_conv = patch0_conv.view(-1,2048)
-		patch1_conv = patch1_conv.view(-1,2048)
+		patch0_conv = patch0_conv.view(-1,256)
+		patch1_conv = patch1_conv.view(-1,256)
 
 		pred_affine = self.fc(torch.cat((patch0_conv,patch1_conv),dim=1))
 		pred_affine = pred_affine.view(-1,2,2)
