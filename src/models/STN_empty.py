@@ -4,14 +4,14 @@ import torch.nn.functional as F
 from torch.nn import init
 from .net_utils import *
 
-class STN_v1(base_net):
+class STN_empty(base_net):
 	def __init__(self,lvl,bins):
 		self.lvl = lvl
 		self.bins = bins
 		base_net.__init__(self)
 
 	def setup(self):
-		print('STN:\t\tSTN_v1 - lvl:%i - bins:%i' % (self.lvl,self.bins))
+		print('STN:\t\tSTN_empty - lvl:%i - bins:%i' % (self.lvl,self.bins))
 
 		self.conv1 = nn.Sequential(
 			conv(in_planes = 3, out_planes = 32, kernel_size = 3, padding = 1),
@@ -55,10 +55,8 @@ class STN_v1(base_net):
 
 	def forward(self,x):
 		
-		patch = x[0]			
-		T_affine = x[1]
-		patch0 = patch[:,:,32:96,32:96]
-		patch1 = self.STN(patch,T_affine)
+		patch0 = x[0]
+		patch1 = x[1]
 
 		patch0_conv = self.conv3(self.conv2(self.conv1(patch0)))
 		patch1_conv = self.conv3(self.conv2(self.conv1(patch1)))

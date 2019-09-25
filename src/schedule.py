@@ -10,18 +10,18 @@ train_schedule_1 = {
 	
 	'epoch': {
 		'start': 0,
-		'end': 100,
+		'end': 20,
 	},
 	
 	'lr': {
-		'values': [1e-4, 5e-5, 1e-5],
-		'ckpts': [40,60],
+		'values': [1e-3, 1e-4],
+		'ckpts': [5],
 	},
 
 	'log':{
 		'pretrained': False,
 		'ckpt': None,
-		'TB_path': '../experiments/STN_v1/',
-		'weights_path': '../experiments/STN_v1/checkpoint.pth.tar',
+		'TB_path': '../experiments/STN_v2/',
+		'weights_path': '../experiments/STN_v2/checkpoint.pth.tar',
 	},
 }

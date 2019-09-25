@@ -22,14 +22,13 @@ lvl = 2
 
 print('========================Dataset=========================')
 # choose training dataset
-[train_data,valid_data] = datasets.__dict__[train_schedule['dataset']['name']](bins = bins)
+[train_data,valid_data] = datasets.__dict__[train_schedule['dataset']['name']](bins = bins,t_f = True, v_f=False)
 train_loader = torch.utils.data.DataLoader(train_data, batch_size = b_size, num_workers = 6, shuffle = True)
 train_length = len(train_loader)
 valid_loader = torch.utils.data.DataLoader(valid_data, batch_size = b_size, num_workers = 6, shuffle = False)
 valid_length = len(valid_loader)
 print("Training:\t%i" % (train_length))
 print("Valid:\t\t%i" % (valid_length))
-
 
 # choose models
 model = models.__dict__[train_schedule['model']['name']](lvl = lvl,bins = bins)
@@ -39,15 +38,11 @@ model = model.cuda()
 cudnn.benchmark = True
 
 # choose optimizer
-optimizer = torch.optim.Adam(model.parameters(),lr = 1e-4,betas = (0.9,0.999))
+optimizer = torch.optim.Adam(model.parameters(),lr = train_schedule['lr']['values'][0],betas = (0.9,0.999))
 
 # logs
 train_loss = data_monitor()	# container for loss data
-train_loss_angle = data_monitor()	# container for loss data
-train_loss_scale = data_monitor()	# container for loss data
 valid_loss = data_monitor()	# container for loss data
-valid_loss_angle = data_monitor()	# container for loss data
-valid_loss_scale = data_monitor()	# container for loss data
 
 train_logger = SummaryWriter(log_dir = train_schedule['log']['TB_path'], comment = 'training')	# tensorboard summary
 
@@ -58,8 +53,6 @@ for epoch in range(train_schedule['epoch']['start'],train_schedule['epoch']['end
 	print('=========================TRAIN==========================')
 	model.train()
 	train_loss.reset()
-	train_loss_angle.reset()
-	train_loss_scale.reset()
 	for batch_id, [patch_ts,T_affine, bin_id, scale] in enumerate(train_loader):
 
 		# copy to GPU
@@ -77,12 +70,9 @@ for epoch in range(train_schedule['epoch']['start'],train_schedule['epoch']['end
 		inputs = [patches_var,T_affine_var]
 
 		# forward
-		[pred_angle_var,pred_scale_var] = model(inputs)
+		pred_angle_var = model(inputs)
 
-		loss_angle = CEL(pred_angle_var, bin_id_var)
-		loss_scale = l1norm(pred_scale_var,scale_var)
-
-		loss = loss_angle + 10 * loss_scale
+		loss = CEL(pred_angle_var, bin_id_var)
 
 		# back prop
 		optimizer.zero_grad()
@@ -90,26 +80,18 @@ for epoch in range(train_schedule['epoch']['start'],train_schedule['epoch']['end
 		optimizer.step()
 
 		train_loss.update(loss.data[0],bin_id.size(0))
-		train_loss_angle.update(loss_angle.data[0],bin_id.size(0))
-		train_loss_scale.update(loss_scale.data[0],bin_id.size(0))
 
 		train_logger.add_scalar('train_iter_loss', train_loss.val, iterN)
-		train_logger.add_scalar('train_iter_angel_loss', train_loss_angle.val, iterN)
-		train_logger.add_scalar('train_iter_scale_loss', train_loss_scale.val, iterN)
 		
 		print('|T|\tepoch: %03i/%03i; batch: %04i/%04i (%.2f%%); loss:%.3f (%.3f)' % (epoch,train_schedule['epoch']['end'],batch_id,train_length,100*batch_id/train_length,train_loss.val,train_loss.avg))
 		iterN += 1
 
 	train_logger.add_scalar('train_epoch_loss', train_loss.avg, epoch)
-	train_logger.add_scalar('train_epoch_angel_loss', train_loss_angle.avg, epoch)
-	train_logger.add_scalar('train_epoch_scale_loss', train_loss_scale.avg, epoch)
 
 	## validation session
 	print('=========================VALID==========================')
 	model.eval()
 	valid_loss.reset()
-	valid_loss_angle.reset()
-	valid_loss_scale.reset()
 	for batch_id, [patch_ts,T_affine, bin_id, scale] in enumerate(valid_loader):
 
 		# copy to GPU
@@ -127,41 +109,15 @@ for epoch in range(train_schedule['epoch']['start'],train_schedule['epoch']['end
 		inputs = [patches_var,T_affine_var]
 
 		# forward
-		[pred_angle_var,pred_scale_var] = model(inputs)
-
-		pred_bin_id = F.log_softmax(pred_angle_var, 1)
-		m_value,m_indice = torch.max(pred_bin_id,1)
-		m_indice = m_indice.data.cpu().numpy()
-
-		# for i in range(len(m_indice)):
-		# 	pred_id = m_indice[i]
-		# 	pred_id_l = (pred_id-1) % bins
-		# 	pred_id_r = (pred_id+1) % bins
-		# 	y0 = pred_angle_var[i,pred_id_l].data.cpu()
-		# 	y1 = pred_angle_var[i,pred_id].data.cpu()
-		# 	y2 = pred_angle_var[i,pred_id_r].data.cpu()
-		# 	A = float(y0 / (-2))
-		# 	B = float(y1 / (-1))
-		# 	C = float(y2 / (2))
-		# 	x_hat = (A*1+C*(-1))/(2*(A+B+C))
-		# 	print(x_hat)
-		# 	print(x_hat+pred_id)
-
-
-		loss_angle = CEL(pred_angle_var, bin_id_var)
-		loss_scale = l1norm(pred_scale_var,scale_var)
-
-		loss = loss_angle + 10 * loss_scale
+		pred_angle_var = model(inputs)
+		
+		loss = CEL(pred_angle_var, bin_id_var)
 
 		valid_loss.update(loss.data[0],bin_id.size(0))
-		valid_loss_angle.update(loss_angle.data[0],bin_id.size(0))
-		valid_loss_scale.update(loss_scale.data[0],bin_id.size(0))
 		
 		print('|V|\tepoch: %03i/%03i; batch: %04i/%04i (%.2f%%); loss:%.3f (%.3f)' % (epoch,train_schedule['epoch']['end'],batch_id,valid_length,100*batch_id/valid_length,valid_loss.val,valid_loss.avg))
 
 	train_logger.add_scalar('valid_epoch_loss', valid_loss.avg, epoch)
-	train_logger.add_scalar('valid_epoch_angel_loss', valid_loss_angle.avg, epoch)
-	train_logger.add_scalar('valid_epoch_scale_loss', valid_loss_scale.avg, epoch)
 
 	## update weights if needed
 	if (valid_loss.avg < best_score):

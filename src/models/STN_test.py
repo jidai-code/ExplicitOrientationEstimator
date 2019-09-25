@@ -4,14 +4,14 @@ import torch.nn.functional as F
 from torch.nn import init
 from .net_utils import *
 
-class STN_v1(base_net):
+class STN_test(base_net):
 	def __init__(self,lvl,bins):
 		self.lvl = lvl
 		self.bins = bins
 		base_net.__init__(self)
 
 	def setup(self):
-		print('STN:\t\tSTN_v1 - lvl:%i - bins:%i' % (self.lvl,self.bins))
+		print('STN:\t\tSTN_test - lvl:%i - bins:%i' % (self.lvl,self.bins))
 
 		self.conv1 = nn.Sequential(
 			conv(in_planes = 3, out_planes = 32, kernel_size = 3, padding = 1),
@@ -77,4 +77,4 @@ class STN_v1(base_net):
 
 		pred_angle = self.fc_rot(concat_conv)
 
-		return pred_angle
+		return [patch0,patch1,pred_angle]
