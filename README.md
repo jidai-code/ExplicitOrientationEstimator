@@ -1,6 +1,4 @@
 # ExplicitOrientationEstimator
-This is a temporary repo for paper
-"Explicit Learning of Feature Orientation Estimation". Ji Dai, Junkang Zhang, and Truong Nguyen. IEEE ICIP 2019.
+PyTorch implementation of ["Explicit Learning of Feature Orientation Estimation"](https://ieeexplore.ieee.org/document/8803644). Ji Dai, Junkang Zhang, and Truong Nguyen. IEEE ICIP 2019.
 
-
-Clean code will be released shortly. Please stay tuned.
+Code will be released shortly. Please stay tuned.
